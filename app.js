@@ -1038,14 +1038,17 @@ function openCopyFromModal() {
 }
 
 function executeCopyFrom() {
-  const sourceDateStr = document.getElementById("copyFromDateInput").value;
-  const destDateStr = todaySelectedDate;
-  
+  const dateInput = document.getElementById("copyFromDateInput");
+  const sourceDateStr = dateInput.value;
+  // If opened from Dashboard, use the stored real today date; otherwise use todaySelectedDate
+  const destDateStr = dateInput.dataset.dashDest || todaySelectedDate;
+  delete dateInput.dataset.dashDest; // clean up after use
+
   if (!sourceDateStr) {
     showToast("Please select a source date.", "error");
     return;
   }
-  
+
   if (sourceDateStr === destDateStr) {
     showToast("Source and destination dates cannot be the same.", "error");
     return;
@@ -1103,6 +1106,30 @@ function performCopyTasksBetweenDates(sourceDateStr, destDateStr) {
   }
   
   showToast(msg, copiedCount > 0 ? "success" : "info");
+}
+
+// ===================== DASHBOARD COPY SHORTCUTS =====================
+// These always copy TO today's real date (not todaySelectedDate)
+function dashCopyYesterday() {
+  const todayStr = new Date().toISOString().split("T")[0];
+  const yestObj = new Date(todayStr + "T00:00:00");
+  yestObj.setDate(yestObj.getDate() - 1);
+  const yesterdayStr = yestObj.toISOString().split("T")[0];
+
+  showConfirm(
+    "Copy Yesterday's Tasks",
+    `Copy all tasks from yesterday (${formatDate(yesterdayStr)}) to today (${formatDate(todayStr)})?`,
+    () => { performCopyTasksBetweenDates(yesterdayStr, todayStr); }
+  );
+}
+
+function dashOpenCopyFrom() {
+  const todayStr = new Date().toISOString().split("T")[0];
+  document.getElementById("copyFromDestinationDisplay").textContent = formatDate(todayStr);
+  // Temporarily store today's real date so executeCopyFrom targets it
+  document.getElementById("copyFromDateInput").dataset.dashDest = todayStr;
+  document.getElementById("copyFromDateInput").value = "";
+  openModal("copyFromModal");
 }
 
 // ===================== MODALS =====================
