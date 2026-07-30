@@ -191,15 +191,31 @@ function renderAll() {
 
 // ===================== UPDATE STATS =====================
 function updateStats() {
-  const today = new Date().toISOString().split("T")[0];
-  const todayTasks = tasks.filter(t => t.date === today || t.date === "");
-  const total = todayTasks.length;
-  const done = todayTasks.filter(t => t.status === "Completed").length;
-  const pending = todayTasks.filter(t => t.status !== "Completed").length;
+  const total = tasks.length;
+  const done = tasks.filter(t => t.status === "Completed").length;
+  const pending = tasks.filter(t => t.status !== "Completed").length;
+  const high = tasks.filter(t => t.status !== "Completed" && t.priority === "High").length;
+  const medium = tasks.filter(t => t.status !== "Completed" && t.priority === "Medium").length;
+  const low = tasks.filter(t => t.status !== "Completed" && t.priority === "Low").length;
 
   setText("statTotal", total);
   setText("statDone", done);
   setText("statPending", pending);
+  setText("statHigh", high);
+  setText("statMedium", medium);
+  setText("statLow", low);
+
+  // Progress Bar
+  const progressText = document.getElementById("progressText");
+  const progressBarFill = document.getElementById("progressBarFill");
+  const progressPercentage = document.getElementById("progressPercentage");
+  
+  if (progressText && progressBarFill && progressPercentage) {
+    progressText.textContent = `${done} / ${total} Tasks Completed`;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    progressBarFill.style.width = pct + "%";
+    progressPercentage.textContent = pct + "%";
+  }
 }
 
 function setText(id, val) {
@@ -210,28 +226,57 @@ function setText(id, val) {
 // ===================== DASHBOARD TASK LIST =====================
 function renderDashboard() {
   updateStats();
+  
+  // Today's Tasks Preview
   const container = document.getElementById("dashboardTaskList");
-  if (!container) return;
+  if (container) {
+    const today = new Date().toISOString().split("T")[0];
+    const todayTasks = tasks.filter(t => t.date === today && t.status !== "Completed").slice(0, 5);
 
-  const today = new Date().toISOString().split("T")[0];
-  const todayTasks = tasks.filter(t => t.date === today || t.date === "").slice(0, 6);
-
-  if (todayTasks.length === 0) {
-    container.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><p>No tasks for today. Add your first task above!</p></div>';
-    return;
+    if (todayTasks.length === 0) {
+      container.innerHTML = '<div class="empty-state"><p>No pending tasks for today!</p></div>';
+    } else {
+      container.innerHTML = todayTasks.map(t => `
+        <div class="dash-task-item">
+          <input type="checkbox" class="task-checkbox" onchange="toggleTask('${t.id}')" />
+          <span class="dash-task-name">${escHtml(t.name)}</span>
+          <div class="dash-task-meta">
+            ${t.time ? `<span>${formatTime12(t.time)}</span>` : ""}
+            <span class="badge badge-${t.priority.toLowerCase()}">${t.priority}</span>
+          </div>
+        </div>
+      `).join("");
+    }
   }
 
-  container.innerHTML = todayTasks.map(t => `
-    <div class="dash-task-item">
-      <input type="checkbox" class="task-checkbox" ${t.status === "Completed" ? "checked" : ""} onchange="toggleTask('${t.id}')" />
-      <span class="dash-task-name ${t.status === "Completed" ? "done" : ""}">${escHtml(t.name)}</span>
-      <div class="dash-task-meta">
-        <span>${catIcon(t.category)} ${t.category}</span>
-        ${t.time ? `<span>· ${formatTime12(t.time)}</span>` : ""}
-        <span class="badge badge-${t.priority.toLowerCase()}">${t.priority}</span>
-      </div>
-    </div>
-  `).join("");
+  // Upcoming Tasks
+  const upcomingContainer = document.getElementById("upcomingTaskList");
+  if (upcomingContainer) {
+    const today = new Date().toISOString().split("T")[0];
+    const upcomingTasks = tasks
+      .filter(t => t.status !== "Completed" && t.date && t.date >= today)
+      .sort((a, b) => {
+        const dA = new Date(a.date + "T" + (a.time || "23:59") + ":00");
+        const dB = new Date(b.date + "T" + (b.time || "23:59") + ":00");
+        return dA - dB;
+      })
+      .slice(0, 5);
+
+    if (upcomingTasks.length === 0) {
+      upcomingContainer.innerHTML = '<div class="empty-state"><p>No upcoming tasks.</p></div>';
+    } else {
+      upcomingContainer.innerHTML = upcomingTasks.map(t => `
+        <div class="dash-task-item">
+          <span class="dash-task-name" style="flex:1;">${escHtml(t.name)}</span>
+          <div class="dash-task-meta">
+            <span>${formatDate(t.date)}</span>
+            ${t.time ? `<span>${formatTime12(t.time)}</span>` : ""}
+            <span class="badge badge-${t.priority.toLowerCase()}">${t.priority}</span>
+          </div>
+        </div>
+      `).join("");
+    }
+  }
 }
 
 // ===================== TASK TABLE =====================
@@ -273,6 +318,9 @@ function renderTaskTable(filtered) {
       </td>
       <td style="text-align: right;">
         <div class="action-btns" style="justify-content: flex-end;">
+          <button class="btn-icon" title="Copy" onclick="openCopyTask('${t.id}')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
           <button class="btn-icon" title="Edit" onclick="openEditTask('${t.id}')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
@@ -896,6 +944,80 @@ function exportToPDF() {
   printWindow.document.close();
 }
 
+// ===================== COPY TASK =====================
+let copySelectedDates = [];
+
+function openCopyTask(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  document.getElementById("copyTaskId").value = id;
+  document.getElementById("copyTaskNameDisplay").textContent = task.name;
+  copySelectedDates = [];
+  document.getElementById("copyTaskDateInput").value = "";
+  renderCopySelectedDates();
+  openModal("copyTaskModal");
+}
+
+function addCopyDate() {
+  const d = document.getElementById("copyTaskDateInput").value;
+  if (!d) { showToast("Please select a date.", "error"); return; }
+  if (copySelectedDates.includes(d)) { showToast("Date already added.", "error"); return; }
+  copySelectedDates.push(d);
+  document.getElementById("copyTaskDateInput").value = "";
+  renderCopySelectedDates();
+}
+
+function removeCopyDate(dateStr) {
+  copySelectedDates = copySelectedDates.filter(d => d !== dateStr);
+  renderCopySelectedDates();
+}
+
+function renderCopySelectedDates() {
+  const list = document.getElementById("copySelectedDatesList");
+  if (!list) return;
+  if (copySelectedDates.length === 0) {
+    list.innerHTML = `<span style="font-size:12px; color:var(--text-muted);">No dates selected yet.</span>`;
+    return;
+  }
+  list.innerHTML = copySelectedDates.map(d => `
+    <div class="pill">
+      ${formatDate(d)}
+      <span class="remove-date" onclick="removeCopyDate('${d}')">×</span>
+    </div>
+  `).join("");
+}
+
+function executeCopyTask() {
+  if (copySelectedDates.length === 0) {
+    showToast("Please add at least one date.", "error");
+    return;
+  }
+  const id = document.getElementById("copyTaskId").value;
+  const originalTask = tasks.find(t => t.id === id);
+  if (!originalTask) return;
+
+  copySelectedDates.forEach(dateStr => {
+    const newTask = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      name: originalTask.name,
+      date: dateStr,
+      time: originalTask.time,
+      priority: originalTask.priority,
+      category: originalTask.category,
+      notes: originalTask.notes,
+      status: "Pending",
+      createdAt: new Date().toISOString()
+    };
+    tasks.push(newTask);
+  });
+
+  saveTasks();
+  closeModal("copyTaskModal");
+  renderAll();
+  if (document.getElementById("page-calendar").classList.contains("active")) renderCalendar();
+  showToast(`Task copied to ${copySelectedDates.length} date(s).`, "success");
+}
+
 // ===================== MODALS =====================
 function openModal(id) {
   const el = document.getElementById(id);
@@ -1025,20 +1147,22 @@ function renderCalendar() {
 
     let dotsHtml = "";
     if (info) {
-      const maxDots = 3;
-      let shown = 0;
-      for (let p = 0; p < Math.min(info.pending, maxDots - shown); p++) {
-        dotsHtml += `<span class="cal-dot pending"></span>`; shown++;
+      dotsHtml = `<div class="cal-indicators">`;
+      if (info.pending > 0 || info.done > 0) {
+        dotsHtml += `<div class="cal-indicator-row">`;
+        if (info.pending > 0) dotsHtml += `<span class="cal-dot red" title="Has pending tasks"></span>`;
+        if (info.done > 0) dotsHtml += `<span class="cal-check" title="Has completed tasks">✔</span>`;
+        dotsHtml += `</div>`;
+        const total = info.pending + info.done;
+        dotsHtml += `<div class="cal-indicator-row" style="margin-top:2px;">${total} task${total > 1 ? 's' : ''}</div>`;
       }
-      for (let c = 0; c < Math.min(info.done, maxDots - shown); c++) {
-        dotsHtml += `<span class="cal-dot done"></span>`; shown++;
-      }
+      dotsHtml += `</div>`;
     }
 
     html += `
       <div class="cal-day${isToday ? " today" : ""}${isSelected ? " selected" : ""}" onclick="selectCalDate('${dateStr}')">
         <span class="cal-day-num">${d}</span>
-        ${dotsHtml ? `<div class="cal-dots">${dotsHtml}</div>` : ""}
+        ${dotsHtml}
       </div>`;
   }
 
@@ -1119,6 +1243,9 @@ function renderCalendarPanel() {
           </div>
         </div>
         <div class="cal-task-actions">
+          <button class="btn-icon" title="Copy" onclick="openCopyTask('${t.id}')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
           <button class="btn-icon" title="Edit" onclick="openEditTask('${t.id}'); calAfterEdit=true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>

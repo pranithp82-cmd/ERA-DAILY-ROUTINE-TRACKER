@@ -1340,3 +1340,46 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   .calendar-card { padding: 12px; }
 }
 
+/* Copy Task Modal Styles */
+.multi-date-picker {
+  display: flex; gap: 8px; align-items: center;
+}
+.multi-date-picker input[type="date"] {
+  flex: 1;
+}
+.selected-dates-list .pill {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--input-bg); border: 1px solid var(--border);
+  padding: 4px 10px; border-radius: 20px; font-size: 12px;
+}
+.selected-dates-list .pill .remove-date {
+  cursor: pointer; opacity: 0.6; font-size: 14px;
+}
+.selected-dates-list .pill .remove-date:hover { opacity: 1; color: var(--primary); }
+
+/* Smart Calendar Indicators */
+.cal-indicators {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
+}
+.cal-indicator-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.cal-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.cal-dot.red { background: var(--primary); }
+.cal-check {
+  color: #22c55e;
+  font-size: 10px;
+  font-weight: bold;
+}
