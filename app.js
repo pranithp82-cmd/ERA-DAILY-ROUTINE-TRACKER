@@ -1018,6 +1018,93 @@ function executeCopyTask() {
   showToast(`Task copied to ${copySelectedDates.length} date(s).`, "success");
 }
 
+// ===================== COPY YESTERDAY'S / PAST TASKS =====================
+
+function copyYesterdaysTasks() {
+  const currentSelectedStr = todaySelectedDate;
+  const currentSelectedDateObj = new Date(currentSelectedStr + "T00:00:00");
+  currentSelectedDateObj.setDate(currentSelectedDateObj.getDate() - 1);
+  const yesterdayStr = currentSelectedDateObj.toISOString().split("T")[0];
+
+  showConfirm("Copy Yesterday's Tasks", `Copy all tasks from yesterday (${formatDate(yesterdayStr)}) to today (${formatDate(currentSelectedStr)})?`, () => {
+    performCopyTasksBetweenDates(yesterdayStr, currentSelectedStr);
+  });
+}
+
+function openCopyFromModal() {
+  document.getElementById("copyFromDestinationDisplay").textContent = formatDate(todaySelectedDate);
+  document.getElementById("copyFromDateInput").value = "";
+  openModal("copyFromModal");
+}
+
+function executeCopyFrom() {
+  const sourceDateStr = document.getElementById("copyFromDateInput").value;
+  const destDateStr = todaySelectedDate;
+  
+  if (!sourceDateStr) {
+    showToast("Please select a source date.", "error");
+    return;
+  }
+  
+  if (sourceDateStr === destDateStr) {
+    showToast("Source and destination dates cannot be the same.", "error");
+    return;
+  }
+
+  performCopyTasksBetweenDates(sourceDateStr, destDateStr);
+  closeModal("copyFromModal");
+}
+
+function performCopyTasksBetweenDates(sourceDateStr, destDateStr) {
+  const sourceTasks = tasks.filter(t => t.date === sourceDateStr);
+  
+  if (sourceTasks.length === 0) {
+    showToast(`No tasks found on ${formatDate(sourceDateStr)}.`, "error");
+    return;
+  }
+  
+  const destTasks = tasks.filter(t => t.date === destDateStr);
+  let copiedCount = 0;
+  let skippedCount = 0;
+
+  sourceTasks.forEach(sourceTask => {
+    const isDuplicate = destTasks.some(dt => 
+      dt.name === sourceTask.name && dt.time === sourceTask.time
+    );
+
+    if (isDuplicate) {
+      skippedCount++;
+    } else {
+      const newTask = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        name: sourceTask.name,
+        date: destDateStr,
+        time: sourceTask.time,
+        priority: sourceTask.priority,
+        category: sourceTask.category,
+        notes: sourceTask.notes,
+        status: "Pending", // Reset status
+        createdAt: new Date().toISOString()
+      };
+      tasks.push(newTask);
+      destTasks.push(newTask); // for dup checking of newly added
+      copiedCount++;
+    }
+  });
+
+  saveTasks();
+  renderAll();
+  if (document.getElementById("page-calendar").classList.contains("active")) renderCalendar();
+  if (document.getElementById("page-today").classList.contains("active")) renderTaskTable();
+  
+  let msg = `✓ ${copiedCount} task${copiedCount === 1 ? '' : 's'} copied successfully.`;
+  if (skippedCount > 0) {
+    msg += ` ⚠ ${skippedCount} duplicate task${skippedCount === 1 ? '' : 's'} skipped.`;
+  }
+  
+  showToast(msg, copiedCount > 0 ? "success" : "info");
+}
+
 // ===================== MODALS =====================
 function openModal(id) {
   const el = document.getElementById(id);

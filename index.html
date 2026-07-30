@@ -174,7 +174,7 @@
           <h1>Today's Tasks</h1>
           <p class="header-date" id="todayPageDate"></p>
         </div>
-        <div class="header-right today-date-nav">
+        <div class="header-right today-date-nav" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
           <button class="btn btn-outline nav-day-btn" onclick="prevTodayDate()" title="Previous Day">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
             Previous Day
@@ -186,6 +186,12 @@
           <button class="btn btn-outline nav-day-btn" onclick="nextTodayDate()" title="Next Day">
             Next Day
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          <button class="btn btn-outline nav-day-btn" onclick="copyYesterdaysTasks()">
+            📋 Copy Yesterday's Tasks
+          </button>
+          <button class="btn btn-outline nav-day-btn" onclick="openCopyFromModal()">
+            📋 Copy Tasks From...
           </button>
         </div>
       </header>
@@ -524,6 +530,26 @@
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="closeModal('copyTaskModal')">Cancel</button>
         <button class="btn btn-primary" onclick="executeCopyTask()">Copy to Selected Dates</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="copyFromModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Copy Tasks From Date</h3>
+        <button class="modal-close" onclick="closeModal('copyFromModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 12px; font-size: 14px; color: var(--text-secondary);">Select a previous date to copy tasks to the currently selected date (<strong id="copyFromDestinationDisplay" style="color: var(--text);"></strong>).</p>
+        <div class="form-group">
+          <label for="copyFromDateInput">Source Date</label>
+          <input type="date" id="copyFromDateInput" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('copyFromModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="executeCopyFrom()">Copy Tasks</button>
       </div>
     </div>
   </div>
