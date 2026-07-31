@@ -9,14 +9,14 @@ const path = require("path");
 const envPath    = path.join(__dirname, ".env");
 const outputPath = path.join(__dirname, "env-config.js");
 
-const envKeys = [
-  "VITE_FIREBASE_API_KEY",
-  "VITE_FIREBASE_AUTH_DOMAIN",
-  "VITE_FIREBASE_DATABASE_URL",
-  "VITE_FIREBASE_PROJECT_ID",
-  "VITE_FIREBASE_STORAGE_BUCKET",
-  "VITE_FIREBASE_MESSAGING_SENDER_ID",
-  "VITE_FIREBASE_APP_ID"
+const targetKeys = [
+  "FIREBASE_API_KEY",
+  "FIREBASE_AUTH_DOMAIN",
+  "FIREBASE_DATABASE_URL",
+  "FIREBASE_PROJECT_ID",
+  "FIREBASE_STORAGE_BUCKET",
+  "FIREBASE_MESSAGING_SENDER_ID",
+  "FIREBASE_APP_ID"
 ];
 
 const env = {};
@@ -28,13 +28,17 @@ if (fs.existsSync(envPath)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
     const [key, ...rest] = trimmed.split("=");
-    env[key.trim()] = rest.join("=").trim();
+    const k = key.trim();
+    const v = rest.join("=").trim();
+    env[k] = v;
   }
 } else {
   // Remote environment (Vercel build): read from system process.env
-  for (const key of envKeys) {
-    if (process.env[key]) {
-      env[key] = process.env[key];
+  for (const baseKey of targetKeys) {
+    const val = process.env[`VITE_${baseKey}`] || process.env[baseKey];
+    if (val) {
+      env[`VITE_${baseKey}`] = val;
+      env[baseKey] = val;
     }
   }
 }
