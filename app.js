@@ -93,8 +93,17 @@ function initNavigation() {
     item.addEventListener("click", e => {
       e.preventDefault();
       navigateTo(item.dataset.page);
+      closeSidebar();
     });
   });
+}
+
+function toggleSidebar() {
+  document.body.classList.toggle('sidebar-open');
+}
+
+function closeSidebar() {
+  document.body.classList.remove('sidebar-open');
 }
 
 function navigateTo(page) {
@@ -301,22 +310,23 @@ function renderTaskTable(filtered) {
     const isDone = t.status === "Completed";
     return `
     <tr class="${isDone ? "completed-row" : ""}">
-      <td>
+      <td data-label="Done">
         <input type="checkbox" class="task-checkbox" ${isDone ? "checked" : ""} onchange="toggleTask('${t.id}')" />
       </td>
-      <td>
+      <td data-label="Task Name">
         <span class="task-name ${isDone ? "done" : ""}">${escHtml(t.name)}</span>
         ${t.notes ? `<div class="task-notes-hint" style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">📝 ${escHtml(t.notes)}</div>` : ""}
       </td>
-      <td>${t.time ? formatTime12(t.time) : "—"}</td>
-      <td><span class="cat-badge">${catIcon(t.category)} ${t.category}</span></td>
-      <td><span class="badge badge-${t.priority.toLowerCase()}">${t.priority}</span></td>
-      <td>
+      <td data-label="Date">${t.date ? formatDate(t.date) : "—"}</td>
+      <td data-label="Time">${t.time ? formatTime12(t.time) : "—"}</td>
+      <td data-label="Category"><span class="cat-badge">${catIcon(t.category)} ${t.category}</span></td>
+      <td data-label="Priority"><span class="badge badge-${t.priority.toLowerCase()}">${t.priority}</span></td>
+      <td data-label="Status">
         <span class="status-badge ${isDone ? "status-done" : "status-pending"}" style="${isDone ? "background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)" : ""}">
           ${isDone ? "Completed" : "Not Completed"}
         </span>
       </td>
-      <td style="text-align: right;">
+      <td data-label="Actions" style="text-align: right;">
         <div class="action-btns" style="justify-content: flex-end;">
           <button class="btn-icon" title="Copy" onclick="openCopyTask('${t.id}')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
