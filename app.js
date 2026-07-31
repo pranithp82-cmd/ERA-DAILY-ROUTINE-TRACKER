@@ -91,7 +91,7 @@ function formatAuthError(err) {
   return err.message || "Authentication failed. Please try again.";
 }
 
-function handleAuthAction() {
+async function handleAuthAction() {
   const email = document.getElementById("authEmail").value.trim();
   const pass  = document.getElementById("authPassword").value;
   if (!email || !pass) { showToast("Please enter email and password.", "error"); return; }
@@ -101,12 +101,32 @@ function handleAuthAction() {
   btn.textContent = "Please wait...";
   const restore = () => { btn.disabled = false; btn.textContent = isAuthModeLogin ? "Sign In" : "Sign Up"; };
 
-  if (isAuthModeLogin) {
-    signInWithEmailAndPassword(auth, email, pass)
-      .catch(err => { showToast(formatAuthError(err), "error"); restore(); });
-  } else {
-    createUserWithEmailAndPassword(auth, email, pass)
-      .catch(err => { showToast(formatAuthError(err), "error"); restore(); });
+  try {
+    if (isAuthModeLogin) {
+      try {
+        await signInWithEmailAndPassword(auth, email, pass);
+      } catch (err) {
+        // If user not found / invalid credential, auto-attempt account creation
+        if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
+          try {
+            await createUserWithEmailAndPassword(auth, email, pass);
+            showToast("Account created and signed in successfully! 🎉", "success");
+            return;
+          } catch (createErr) {
+            if (createErr.code !== "auth/email-already-in-use") {
+              throw createErr;
+            }
+          }
+        }
+        throw err;
+      }
+    } else {
+      await createUserWithEmailAndPassword(auth, email, pass);
+      showToast("Account created and signed in successfully! 🎉", "success");
+    }
+  } catch (err) {
+    showToast(formatAuthError(err), "error");
+    restore();
   }
 }
 
