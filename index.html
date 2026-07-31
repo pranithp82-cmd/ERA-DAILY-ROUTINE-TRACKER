@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
-  <!-- Env vars injected from .env via load-env.js — DO NOT COMMIT env-config.js -->
-  <script src="env-config.js"></script>
+  <!-- Env vars injected from .env via load-env.js — fallback active if missing -->
+  <script src="env-config.js" onerror="this.remove()"></script>
 </head>
 <body>
   <!-- AUTH OVERLAY -->
