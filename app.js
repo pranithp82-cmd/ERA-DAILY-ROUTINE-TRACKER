@@ -143,36 +143,43 @@ function handleSignOut() {
 
 // ── Real-time per-path listeners ─────────────────────────────────────────────
 function listenToDatabase() {
+  const onDbError = (err) => {
+    console.error("Firebase Database error:", err);
+    if (err.code === "PERMISSION_DENIED" || err.message?.includes("PERMISSION_DENIED")) {
+      showToast("⚠️ Realtime Database Permission Denied! Check your Firebase Console Rules.", "error");
+    }
+  };
+
   // Tasks
   const unsubTasks = onValue(userRef('tasks'), snap => {
     tasks = mapToTasks(snap.val());
     renderAll();
     if (document.getElementById("page-calendar")?.classList.contains("active")) renderCalendar();
-  });
+  }, onDbError);
 
   // Notes
   const unsubNotes = onValue(userRef('notes'), snap => {
     const data = snap.val();
     if (data) { notes = data; loadNotes(); }
-  });
+  }, onDbError);
 
   // Date Notes
   const unsubDateNotes = onValue(userRef('dateNotes'), snap => {
     dateNotes = snap.val() || {};
     loadDateNotesForSelectedDate();
-  });
+  }, onDbError);
 
   // Routines
   const unsubRoutines = onValue(userRef('routines'), snap => {
     const data = snap.val();
     if (data) routines = data;
-  });
+  }, onDbError);
 
   // Settings / theme
   const unsubTheme = onValue(userRef('settings/theme'), snap => {
     const theme = snap.val() || "dark";
     if (theme !== currentTheme) { currentTheme = theme; applyTheme(theme, false); }
-  });
+  }, onDbError);
 
   dbUnsubscribers = [unsubTasks, unsubNotes, unsubDateNotes, unsubRoutines, unsubTheme];
 }
