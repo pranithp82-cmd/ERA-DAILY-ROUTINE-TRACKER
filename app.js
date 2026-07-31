@@ -421,12 +421,7 @@ function setPillActive(containerId, cat) {
   });
 }
 
-// ===================== SAVE HELPERS =====================
-// Tasks are stored as an id-keyed object map in Firebase for atomic updates
-function saveTasks()     { if (userUid) set(userRef('tasks'),     tasksToMap(tasks)); }
-function saveRoutines()  { if (userUid) set(userRef('routines'),  routines); }
-function saveNoteData()  { if (userUid) set(userRef('notes'),     notes); }
-function saveDateNotes() { if (userUid) set(userRef('dateNotes'), dateNotes); }
+
 
 // ===================== ROUTINE MODAL =====================
 function openRoutineModal(section, editId) {
