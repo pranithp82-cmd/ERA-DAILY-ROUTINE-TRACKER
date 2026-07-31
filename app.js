@@ -262,6 +262,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // Enter key to submit auth form
   document.getElementById("authPassword")?.addEventListener("keydown", e => { if (e.key === "Enter") handleAuthAction(); });
   document.getElementById("authEmail")?.addEventListener("keydown", e => { if (e.key === "Enter") handleAuthAction(); });
+
+  // Direct Event Listeners for Auth Buttons
+  document.getElementById("authActionBtn")?.addEventListener("click", e => { e.preventDefault(); handleAuthAction(); });
+  document.getElementById("googleSignInBtn")?.addEventListener("click", e => { e.preventDefault(); handleSignInWithGoogle(); });
+  document.getElementById("authToggleBtn")?.addEventListener("click", e => { e.preventDefault(); toggleAuthMode(); });
 });
 
 // ── Expose functions to window for HTML onclick= handlers ────────────────
