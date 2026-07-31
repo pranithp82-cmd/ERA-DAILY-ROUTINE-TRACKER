@@ -1609,3 +1609,48 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .modal-sm { max-width: 400px; }
 
+/* === TOAST NOTIFICATIONS === */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 14px 22px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: #222;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  z-index: 999999;
+  opacity: 0;
+  transform: translateY(20px);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.toast.error {
+  background: #7f1d1d;
+  border-color: #ef4444;
+  color: #fecaca;
+}
+
+.toast.success {
+  background: #064e3b;
+  border-color: #10b981;
+  color: #a7f3d0;
+}
+
+.toast.info {
+  background: #1e293b;
+  border-color: #3b82f6;
+  color: #bfdbfe;
+}
+
+
