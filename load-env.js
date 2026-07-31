@@ -1,9 +1,6 @@
 // =====================================================
 //  load-env.js  –  ERA Daily Routine Tracker
-//  Reads .env and writes env-config.js for the browser
-//
-//  Run once before opening the app:
-//    node load-env.js
+//  Reads .env (local) or process.env (Vercel/CI) and writes env-config.js
 // =====================================================
 
 const fs   = require("fs");
@@ -12,20 +9,34 @@ const path = require("path");
 const envPath    = path.join(__dirname, ".env");
 const outputPath = path.join(__dirname, "env-config.js");
 
-if (!fs.existsSync(envPath)) {
-  console.error("❌  .env file not found. Copy .env.example → .env and fill in your values.");
-  process.exit(1);
-}
+const envKeys = [
+  "VITE_FIREBASE_API_KEY",
+  "VITE_FIREBASE_AUTH_DOMAIN",
+  "VITE_FIREBASE_DATABASE_URL",
+  "VITE_FIREBASE_PROJECT_ID",
+  "VITE_FIREBASE_STORAGE_BUCKET",
+  "VITE_FIREBASE_MESSAGING_SENDER_ID",
+  "VITE_FIREBASE_APP_ID"
+];
 
-// Parse KEY=VALUE lines (skip comments and blank lines)
-const lines = fs.readFileSync(envPath, "utf-8").split(/\r?\n/);
-const env   = {};
+const env = {};
 
-for (const line of lines) {
-  const trimmed = line.trim();
-  if (!trimmed || trimmed.startsWith("#")) continue;
-  const [key, ...rest] = trimmed.split("=");
-  env[key.trim()] = rest.join("=").trim();
+if (fs.existsSync(envPath)) {
+  // Local environment: read from .env file
+  const lines = fs.readFileSync(envPath, "utf-8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const [key, ...rest] = trimmed.split("=");
+    env[key.trim()] = rest.join("=").trim();
+  }
+} else {
+  // Remote environment (Vercel build): read from system process.env
+  for (const key of envKeys) {
+    if (process.env[key]) {
+      env[key] = process.env[key];
+    }
+  }
 }
 
 // Write a browser-friendly JS file that sets window.__ENV__
