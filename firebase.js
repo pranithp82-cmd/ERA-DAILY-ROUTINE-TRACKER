@@ -22,6 +22,16 @@ const firebaseConfig = {
   appId:             getVal("FIREBASE_APP_ID")             || "1:725120609645:web:fd4435d4ac6e3411b6fe64"
 };
 
-const app      = initializeApp(firebaseConfig);
-export const auth     = getAuth(app);
-export const database = getDatabase(app);
+let app = null;
+let auth = null;
+let database = null;
+
+try {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  database = getDatabase(app);
+} catch (err) {
+  console.error("Firebase SDK init error:", err);
+}
+
+export { app, auth, database };

@@ -68,6 +68,9 @@ function toggleAuthMode() {
   document.getElementById("authActionBtn").textContent   = isAuthModeLogin ? "Sign In"               : "Sign Up";
   document.getElementById("authToggleText").textContent  = isAuthModeLogin ? "Don't have an account?" : "Already have an account?";
   document.getElementById("authToggleBtn").textContent   = isAuthModeLogin ? "Sign Up"               : "Sign In";
+  
+  document.getElementById("authEmail")?.focus();
+  showToast(isAuthModeLogin ? "Switched to Sign In mode." : "Switched to Sign Up mode. Enter your email & password.", "info");
 }
 
 function formatAuthError(err) {
