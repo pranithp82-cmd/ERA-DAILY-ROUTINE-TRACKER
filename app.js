@@ -1,21 +1,43 @@
 /* =============================================
    ERA DAILY ROUTINE TRACKER - App Logic
-   All data synced with Firebase Realtime Database
+   Firebase v9 Modular SDK
    ============================================= */
+
+// ── Firebase v9 imports ──────────────────────────────────────────────────────
+import { auth, database } from './firebase.js';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signOut as firebaseSignOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  ref,
+  set,
+  update,
+  get,
+  onValue,
+  off,
+  child
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 // ===================== STATE =====================
 let currentUser = null;
-let dbRef = null;
+let userUid = null;
+/** Unsubscribe functions returned by onValue() – stored so we can detach all */
+let dbUnsubscribers = [];
 
-/** tasks[] is the in-memory array the whole app uses. It is derived from
- *  the Firebase record map { taskId: taskObject } on every sync. */
+/** tasks[] is the in-memory array the whole app uses. Derived from the
+ *  Firebase object map { taskId: taskObject } on every sync. */
 let tasks = [];
 let routines = {"Morning":[],"Afternoon":[],"Evening":[],"Night":[]};
 let notes = {"daily":"","shopping":"","ideas":"","reminders":""};
 let dateNotes = {};
 let currentTheme = "dark";
 
-// ---- Helpers: convert between array <-> Firebase object map ----
+// ── Convert between array <-> Firebase object map ────────────────────────────
 function tasksToMap(arr) {
   const map = {};
   arr.forEach(t => { if (t && t.id) map[t.id] = t; });
@@ -26,104 +48,119 @@ function mapToTasks(map) {
   return Object.values(map).filter(Boolean);
 }
 
+/** Convenience: return a database ref for the current user's path */
+function userRef(path) {
+  return ref(database, `users/${userUid}/${path}`);
+}
+
+// ── Detach all real-time listeners ───────────────────────────────────────────
+function detachAllListeners() {
+  dbUnsubscribers.forEach(unsub => { try { unsub(); } catch(_) {} });
+  dbUnsubscribers = [];
+}
+
 // ---- Auth UI State ----
 let isAuthModeLogin = true;
 
 function toggleAuthMode() {
   isAuthModeLogin = !isAuthModeLogin;
-  document.getElementById("authTitle").textContent = isAuthModeLogin ? "Welcome Back" : "Create Account";
-  document.getElementById("authActionBtn").textContent = isAuthModeLogin ? "Sign In" : "Sign Up";
-  document.getElementById("authToggleText").textContent = isAuthModeLogin ? "Don't have an account?" : "Already have an account?";
-  document.getElementById("authToggleBtn").textContent = isAuthModeLogin ? "Sign Up" : "Sign In";
+  document.getElementById("authTitle").textContent       = isAuthModeLogin ? "Welcome Back"          : "Create Account";
+  document.getElementById("authActionBtn").textContent   = isAuthModeLogin ? "Sign In"               : "Sign Up";
+  document.getElementById("authToggleText").textContent  = isAuthModeLogin ? "Don't have an account?" : "Already have an account?";
+  document.getElementById("authToggleBtn").textContent   = isAuthModeLogin ? "Sign Up"               : "Sign In";
 }
 
 function handleAuthAction() {
   const email = document.getElementById("authEmail").value.trim();
   const pass  = document.getElementById("authPassword").value;
   if (!email || !pass) { showToast("Please enter email and password.", "error"); return; }
+
   const btn = document.getElementById("authActionBtn");
   btn.disabled = true;
   btn.textContent = "Please wait...";
   const restore = () => { btn.disabled = false; btn.textContent = isAuthModeLogin ? "Sign In" : "Sign Up"; };
 
   if (isAuthModeLogin) {
-    firebase.auth().signInWithEmailAndPassword(email, pass)
+    signInWithEmailAndPassword(auth, email, pass)
       .catch(err => { showToast(err.message, "error"); restore(); });
   } else {
-    firebase.auth().createUserWithEmailAndPassword(email, pass)
+    createUserWithEmailAndPassword(auth, email, pass)
       .catch(err => { showToast(err.message, "error"); restore(); });
   }
 }
 
-function signInWithGoogle() {
-  const provider = new firebase.auth.GoogleAuthProvider();
-  firebase.auth().signInWithPopup(provider)
+function handleSignInWithGoogle() {
+  const provider = new GoogleAuthProvider();
+  signInWithPopup(auth, provider)
     .catch(err => showToast(err.message, "error"));
 }
 
-function signOut() {
-  if (dbRef) { dbRef.off(); dbRef = null; }  // detach all listeners
-  firebase.auth().signOut();
+function handleSignOut() {
+  detachAllListeners();
+  firebaseSignOut(auth);
 }
 
-// ---- Attach per-path real-time listeners ----
+// ── Real-time per-path listeners ─────────────────────────────────────────────
 function listenToDatabase() {
-  if (!dbRef) return;
-
   // Tasks
-  dbRef.child('tasks').on('value', snap => {
+  const unsubTasks = onValue(userRef('tasks'), snap => {
     tasks = mapToTasks(snap.val());
     renderAll();
     if (document.getElementById("page-calendar")?.classList.contains("active")) renderCalendar();
   });
 
   // Notes
-  dbRef.child('notes').on('value', snap => {
+  const unsubNotes = onValue(userRef('notes'), snap => {
     const data = snap.val();
-    if (data) {
-      notes = data;
-      loadNotes();
-    }
+    if (data) { notes = data; loadNotes(); }
   });
 
   // Date Notes
-  dbRef.child('dateNotes').on('value', snap => {
-    const data = snap.val();
-    dateNotes = data || {};
+  const unsubDateNotes = onValue(userRef('dateNotes'), snap => {
+    dateNotes = snap.val() || {};
     loadDateNotesForSelectedDate();
   });
 
+  // Routines
+  const unsubRoutines = onValue(userRef('routines'), snap => {
+    const data = snap.val();
+    if (data) routines = data;
+  });
+
   // Settings / theme
-  dbRef.child('settings/theme').on('value', snap => {
+  const unsubTheme = onValue(userRef('settings/theme'), snap => {
     const theme = snap.val() || "dark";
-    if (theme !== currentTheme) {
-      currentTheme = theme;
-      applyTheme(theme, false);
-    }
+    if (theme !== currentTheme) { currentTheme = theme; applyTheme(theme, false); }
   });
+
+  dbUnsubscribers = [unsubTasks, unsubNotes, unsubDateNotes, unsubRoutines, unsubTheme];
 }
 
-// ---- One-time migration from localStorage ----
-function migrateDataIfNeeded() {
-  if (!dbRef) return;
-  dbRef.child('migrated').once('value').then(snap => {
-    if (snap.exists()) return;  // already migrated
+// ── One-time migration from localStorage ────────────────────────────────────
+async function migrateDataIfNeeded() {
+  const migSnap = await get(userRef('migrated'));
+  if (migSnap.exists()) return;   // already migrated
 
-    const localTasks    = JSON.parse(localStorage.getItem("era_tasks")      || "[]");
-    const localNotes    = JSON.parse(localStorage.getItem("era_notes")      || "{}");
-    const localDateNotes= JSON.parse(localStorage.getItem("era_date_notes") || "{}");
-    const localTheme    = localStorage.getItem("era_theme") || "dark";
+  const localTasks     = JSON.parse(localStorage.getItem("era_tasks")      || "[]");
+  const localNotes     = JSON.parse(localStorage.getItem("era_notes")      || "{}");
+  const localDateNotes = JSON.parse(localStorage.getItem("era_date_notes") || "{}");
+  const localTheme     = localStorage.getItem("era_theme") || "dark";
 
-    const update = { migrated: true, settings: { theme: localTheme } };
-    if (localTasks.length > 0)           update.tasks     = tasksToMap(localTasks);
-    if (Object.keys(localNotes).length)  update.notes     = localNotes;
-    if (Object.keys(localDateNotes).length) update.dateNotes = localDateNotes;
+  const upd = { migrated: true, settings: { theme: localTheme } };
+  if (localTasks.length > 0)             upd.tasks     = tasksToMap(localTasks);
+  if (Object.keys(localNotes).length)    upd.notes     = localNotes;
+  if (Object.keys(localDateNotes).length) upd.dateNotes = localDateNotes;
 
-    dbRef.update(update).then(() => {
-      showToast("Existing data migrated to cloud! ☁️", "success");
-    }).catch(err => console.error("Migration error:", err));
-  });
+  await update(ref(database, `users/${userUid}`), upd);
+  showToast("Local data migrated to cloud! ☁️", "success");
 }
+
+// ===================== SAVE HELPERS =====================
+function saveTasks()     { if (userUid) set(userRef('tasks'),     tasksToMap(tasks)); }
+function saveRoutines()  { if (userUid) set(userRef('routines'),  routines); }
+function saveNoteData()  { if (userUid) set(userRef('notes'),     notes); }
+function saveDateNotes() { if (userUid) set(userRef('dateNotes'), dateNotes); }
+function saveTheme(t)    { if (userUid) set(userRef('settings/theme'), t); }
 
 // Selected category in the add-task form
 let selectedCategory = "Morning";
@@ -132,8 +169,8 @@ let editSelectedCategory = "Morning";
 // ===================== CALENDAR STATE =====================
 const now_init = new Date();
 let calYear = now_init.getFullYear();
-let calMonth = now_init.getMonth(); // 0-indexed
-let calSelectedDate = null;          // "YYYY-MM-DD"
+let calMonth = now_init.getMonth();  // 0-indexed
+let calSelectedDate = null;           // "YYYY-MM-DD"
 let calFilter = "all";
 
 // ===================== TODAY'S TASKS STATE =====================
@@ -142,33 +179,30 @@ let currentQuickFilter = "today"; // "today", "tomorrow", "week", "upcoming", "a
 
 // ===================== INIT =====================
 document.addEventListener("DOMContentLoaded", () => {
-  // Initialize Auth Listener if Firebase is configured
-  if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
-    firebase.auth().onAuthStateChanged(user => {
-      if (user) {
-        currentUser = user;
-        // Detach old listeners before creating new ones
-        if (dbRef) dbRef.off();
-        dbRef = firebase.database().ref('users/' + user.uid);
-        document.getElementById("authOverlay").classList.add("hidden");
-        showToast("Signed in as " + (user.displayName || user.email), "success");
+  // Auth state listener
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      currentUser = user;
+      userUid = user.uid;
+      document.getElementById("authOverlay").classList.add("hidden");
+      showToast("Signed in as " + (user.displayName || user.email), "success");
 
-        migrateDataIfNeeded();
-        listenToDatabase();
-      } else {
-        currentUser = null;
-        if (dbRef) { dbRef.off(); dbRef = null; }
-        document.getElementById("authOverlay").classList.remove("hidden");
+      migrateDataIfNeeded();
+      listenToDatabase();
+    } else {
+      currentUser = null;
+      userUid = null;
+      detachAllListeners();
+      document.getElementById("authOverlay").classList.remove("hidden");
 
-        // Reset state
-        tasks = [];
-        notes = {"daily":"","shopping":"","ideas":"","reminders":""};
-        dateNotes = {};
-        renderAll();
-        loadNotes();
-      }
-    });
-  }
+      // Reset state
+      tasks = [];
+      notes = {"daily":"","shopping":"","ideas":"","reminders":""};
+      dateNotes = {};
+      renderAll();
+      loadNotes();
+    }
+  });
 
   applyTheme(currentTheme, false);
   initClock();
@@ -178,7 +212,53 @@ document.addEventListener("DOMContentLoaded", () => {
   updateTodayPageHeader();
   renderAll();
   loadNotes();
+
+  // ── Expose functions to window for HTML onclick= handlers ────────────────
+  window.toggleAuthMode        = toggleAuthMode;
+  window.handleAuthAction      = handleAuthAction;
+  window.signInWithGoogle      = handleSignInWithGoogle;
+  window.signOut               = handleSignOut;
+  window.addTask               = addTask;
+  window.toggleTask            = toggleTask;
+  window.openEditTask          = openEditTask;
+  window.saveEditTask          = saveEditTask;
+  window.deleteTask            = deleteTask;
+  window.openCopyTask          = openCopyTask;
+  window.addCopyDate           = addCopyDate;
+  window.removeCopyDate        = removeCopyDate;
+  window.executeCopyTask       = executeCopyTask;
+  window.copyYesterdaysTasks   = copyYesterdaysTasks;
+  window.openCopyFromModal     = openCopyFromModal;
+  window.executeCopyFrom       = executeCopyFrom;
+  window.dashCopyYesterday     = dashCopyYesterday;
+  window.dashOpenCopyFrom      = dashOpenCopyFrom;
+  window.saveNote              = saveNote;
+  window.setTheme              = setTheme;
+  window.confirmDeleteAll      = confirmDeleteAll;
+  window.exportData            = exportData;
+  window.importData            = importData;
+  window.exportToPDF           = exportToPDF;
+  window.filterTasks           = filterTasks;
+  window.setQuickFilter        = setQuickFilter;
+  window.prevTodayDate         = prevTodayDate;
+  window.nextTodayDate         = nextTodayDate;
+  window.onTodayDateSelect     = onTodayDateSelect;
+  window.saveDateNoteForSelectedDate = saveDateNoteForSelectedDate;
+  window.openModal             = openModal;
+  window.closeModal            = closeModal;
+  window.prevMonth             = prevMonth;
+  window.nextMonth             = nextMonth;
+  window.selectCalDate         = selectCalDate;
+  window.setCalFilter          = setCalFilter;
+  window.addCalendarTask       = addCalendarTask;
+  window.calToggleTask         = calToggleTask;
+  window.calDeleteTask         = calDeleteTask;
+  window.toggleSidebar         = toggleSidebar;
+  window.navigateTo            = navigateTo;
+  window.openRoutineModal      = openRoutineModal;
+  window.saveRoutineItem       = saveRoutineItem;
 });
+
 
 // ===================== CLOCK =====================
 function initClock() {
@@ -278,17 +358,51 @@ function setPillActive(containerId, cat) {
 
 // ===================== SAVE HELPERS =====================
 // Tasks are stored as an id-keyed object map in Firebase for atomic updates
-function saveTasks() {
-  if (dbRef) dbRef.child('tasks').set(tasksToMap(tasks));
+function saveTasks()     { if (userUid) set(userRef('tasks'),     tasksToMap(tasks)); }
+function saveRoutines()  { if (userUid) set(userRef('routines'),  routines); }
+function saveNoteData()  { if (userUid) set(userRef('notes'),     notes); }
+function saveDateNotes() { if (userUid) set(userRef('dateNotes'), dateNotes); }
+
+// ===================== ROUTINE MODAL =====================
+function openRoutineModal(section, editId) {
+  document.getElementById('routineModalSection').value = section || '';
+  document.getElementById('routineModalEditId').value  = editId  || '';
+  document.getElementById('routineItemName').value     = '';
+  document.getElementById('routineItemTime').value     = '';
+  document.getElementById('routineModalTitle').textContent = editId ? 'Edit Routine' : 'Add Routine';
+
+  if (editId) {
+    const item = (routines[section] || []).find(r => r.id === editId);
+    if (item) {
+      document.getElementById('routineItemName').value = item.name || '';
+      document.getElementById('routineItemTime').value = item.time || '';
+    }
+  }
+  document.getElementById('routineModal').classList.add('active');
 }
-function saveRoutines() {
-  if (dbRef) dbRef.child('routines').set(routines);
-}
-function saveNoteData() {
-  if (dbRef) dbRef.child('notes').set(notes);
-}
-function saveDateNotes() {
-  if (dbRef) dbRef.child('dateNotes').set(dateNotes);
+
+function saveRoutineItem() {
+  const name    = document.getElementById('routineItemName').value.trim();
+  const time    = document.getElementById('routineItemTime').value;
+  const section = document.getElementById('routineModalSection').value || 'Morning';
+  const editId  = document.getElementById('routineModalEditId').value;
+
+  if (!name) { showToast('Please enter a routine name.', 'error'); return; }
+
+  if (!routines[section]) routines[section] = [];
+
+  if (editId) {
+    // Edit existing
+    const idx = routines[section].findIndex(r => r.id === editId);
+    if (idx !== -1) routines[section][idx] = { id: editId, name, time };
+  } else {
+    // Add new
+    routines[section].push({ id: Date.now().toString(), name, time });
+  }
+
+  saveRoutines();
+  closeModal('routineModal');
+  showToast(editId ? 'Routine updated!' : 'Routine added!', 'success');
 }
 
 // ===================== ADD TASK =====================
@@ -1568,3 +1682,5 @@ saveEditTask = function() {
     renderCalendar();
   }
 };
+
+// (window exports are set inside DOMContentLoaded above)

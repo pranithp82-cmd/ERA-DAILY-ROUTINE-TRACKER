@@ -1,0 +1,14 @@
+# =====================================================
+#  .gitignore  –  ERA Daily Routine Tracker
+# =====================================================
+
+# Firebase credentials (never commit real keys!)
+.env
+
+env-config.js
+# OS junk
+.DS_Store
+Thumbs.db
+
+# node modules
+node_modules/

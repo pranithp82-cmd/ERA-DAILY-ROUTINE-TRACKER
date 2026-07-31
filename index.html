@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <!-- Env vars injected from .env via load-env.js — DO NOT COMMIT env-config.js -->
+  <script src="env-config.js"></script>
 </head>
 <body>
   <!-- AUTH OVERLAY -->
@@ -617,34 +619,8 @@
 
   <div class="toast" id="toast"></div>
 
-  <!-- FIREBASE SDK -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-  
-  <script>
-    // ==========================================
-    // FIREBASE CONFIGURATION
-    // REPLACE WITH YOUR FIREBASE CONFIG OBJECT
-    // ==========================================
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_AUTH_DOMAIN",
-      databaseURL: "YOUR_DATABASE_URL",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_STORAGE_BUCKET",
-      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-      appId: "YOUR_APP_ID"
-    };
-    
-    // Initialize Firebase if config is set
-    if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
-      firebase.initializeApp(firebaseConfig);
-    } else {
-      console.warn("⚠️ Firebase config is missing! Please provide your firebaseConfig in index.html.");
-    }
-  </script>
-
-  <script src="app.js"></script>
+  <!-- app.js is an ES module; firebase.js is imported inside it -->
+  <script type="module" src="app.js"></script>
 </body>
 </html>
+
