@@ -4,24 +4,94 @@
    ============================================= */
 
 // ===================== STATE =====================
-let tasks = JSON.parse(localStorage.getItem("era_tasks") || "[]");
-let legacyCompleted = JSON.parse(localStorage.getItem("era_completed") || "[]");
-if (legacyCompleted.length > 0) {
-  legacyCompleted.forEach(ct => {
-    if (!tasks.some(t => t.id === ct.id)) {
-      ct.status = "Completed";
-      if (!ct.date && ct.calDate) ct.date = ct.calDate;
-      tasks.push(ct);
-    }
-  });
-  localStorage.removeItem("era_completed");
-  localStorage.setItem("era_tasks", JSON.stringify(tasks));
+let currentUser = null;
+let dbRef = null;
+
+let tasks = [];
+let routines = {"Morning":[],"Afternoon":[],"Evening":[],"Night":[]};
+let notes = {"daily":"","shopping":"","ideas":"","reminders":""};
+let dateNotes = {};
+let currentTheme = "dark";
+
+// Auth UI State
+let isAuthModeLogin = true;
+
+function toggleAuthMode() {
+  isAuthModeLogin = !isAuthModeLogin;
+  document.getElementById("authTitle").textContent = isAuthModeLogin ? "Welcome Back" : "Create Account";
+  document.getElementById("authActionBtn").textContent = isAuthModeLogin ? "Sign In" : "Sign Up";
+  document.getElementById("authToggleText").textContent = isAuthModeLogin ? "Don't have an account?" : "Already have an account?";
+  document.getElementById("authToggleBtn").textContent = isAuthModeLogin ? "Sign Up" : "Sign In";
 }
 
-let routines = JSON.parse(localStorage.getItem("era_routines") || '{"Morning":[],"Afternoon":[],"Evening":[],"Night":[]}');
-let notes = JSON.parse(localStorage.getItem("era_notes") || '{"daily":"","shopping":"","ideas":"","reminders":""}');
-let dateNotes = JSON.parse(localStorage.getItem("era_date_notes") || "{}");
-let currentTheme = localStorage.getItem("era_theme") || "dark";
+function handleAuthAction() {
+  const email = document.getElementById("authEmail").value;
+  const pass = document.getElementById("authPassword").value;
+  if (!email || !pass) { showToast("Please enter email and password.", "error"); return; }
+  
+  if (isAuthModeLogin) {
+    firebase.auth().signInWithEmailAndPassword(email, pass)
+      .catch(err => showToast(err.message, "error"));
+  } else {
+    firebase.auth().createUserWithEmailAndPassword(email, pass)
+      .catch(err => showToast(err.message, "error"));
+  }
+}
+
+function signInWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider)
+    .catch(err => showToast(err.message, "error"));
+}
+
+function signOut() {
+  firebase.auth().signOut();
+}
+
+function listenToDatabase() {
+  if (!dbRef) return;
+  dbRef.on('value', snapshot => {
+    const data = snapshot.val();
+    if (data) {
+      tasks = data.tasks || [];
+      routines = data.routines || {"Morning":[],"Afternoon":[],"Evening":[],"Night":[]};
+      notes = data.notes || {"daily":"","shopping":"","ideas":"","reminders":""};
+      dateNotes = data.dateNotes || {};
+      const theme = data.settings?.theme || "dark";
+      if (theme !== currentTheme) {
+        currentTheme = theme;
+        applyTheme(theme, false);
+      }
+      
+      loadNotes();
+      updateTodayPageHeader();
+      renderAll();
+    }
+  });
+}
+
+function migrateDataIfNeeded() {
+  if (!dbRef) return;
+  dbRef.child('migrated').once('value').then(snapshot => {
+    if (!snapshot.exists()) {
+      const localTasks = JSON.parse(localStorage.getItem("era_tasks") || "[]");
+      const localNotes = JSON.parse(localStorage.getItem("era_notes") || "{}");
+      const localDateNotes = JSON.parse(localStorage.getItem("era_date_notes") || "{}");
+      const localTheme = localStorage.getItem("era_theme") || "dark";
+      
+      const updateData = {};
+      if (localTasks.length > 0) updateData.tasks = localTasks;
+      if (Object.keys(localNotes).length > 0) updateData.notes = localNotes;
+      if (Object.keys(localDateNotes).length > 0) updateData.dateNotes = localDateNotes;
+      updateData.settings = { theme: localTheme };
+      updateData.migrated = true;
+      
+      dbRef.update(updateData).then(() => {
+        console.log("Migration complete.");
+      });
+    }
+  });
+}
 
 // Selected category in the add-task form
 let selectedCategory = "Morning";
@@ -40,6 +110,31 @@ let currentQuickFilter = "today"; // "today", "tomorrow", "week", "upcoming", "a
 
 // ===================== INIT =====================
 document.addEventListener("DOMContentLoaded", () => {
+  // Initialize Auth Listener if Firebase is configured
+  if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
+    firebase.auth().onAuthStateChanged(user => {
+      if (user) {
+        currentUser = user;
+        dbRef = firebase.database().ref('users/' + user.uid);
+        document.getElementById("authOverlay").classList.add("hidden");
+        
+        migrateDataIfNeeded();
+        listenToDatabase();
+      } else {
+        currentUser = null;
+        if (dbRef) dbRef.off();
+        dbRef = null;
+        document.getElementById("authOverlay").classList.remove("hidden");
+        
+        // Reset state
+        tasks = [];
+        notes = {"daily":"","shopping":"","ideas":"","reminders":""};
+        dateNotes = {};
+        renderAll();
+      }
+    });
+  }
+
   applyTheme(currentTheme, false);
   initClock();
   initDateFields();
@@ -147,10 +242,10 @@ function setPillActive(containerId, cat) {
 }
 
 // ===================== SAVE HELPERS =====================
-function saveTasks() { localStorage.setItem("era_tasks", JSON.stringify(tasks)); }
-function saveRoutines() { localStorage.setItem("era_routines", JSON.stringify(routines)); }
-function saveNoteData() { localStorage.setItem("era_notes", JSON.stringify(notes)); }
-function saveDateNotes() { localStorage.setItem("era_date_notes", JSON.stringify(dateNotes)); }
+function saveTasks() { if (dbRef) dbRef.child('tasks').set(tasks); }
+function saveRoutines() { if (dbRef) dbRef.child('routines').set(routines); }
+function saveNoteData() { if (dbRef) dbRef.child('notes').set(notes); }
+function saveDateNotes() { if (dbRef) dbRef.child('dateNotes').set(dateNotes); }
 
 // ===================== ADD TASK =====================
 function addTask() {
@@ -558,7 +653,7 @@ function saveNote(key) {
 function setTheme(theme) {
   currentTheme = theme;
   applyTheme(theme, true);
-  localStorage.setItem("era_theme", theme);
+  if (dbRef) dbRef.child('settings/theme').set(theme);
 }
 
 function applyTheme(theme, showMsg) {
