@@ -70,6 +70,27 @@ function toggleAuthMode() {
   document.getElementById("authToggleBtn").textContent   = isAuthModeLogin ? "Sign Up"               : "Sign In";
 }
 
+function formatAuthError(err) {
+  const code = err.code || "";
+  console.error("Firebase Auth Error:", err);
+  if (code === "auth/operation-not-allowed") {
+    return "⚠️ Email/Password Auth is disabled in Firebase Console! Go to Firebase Console -> Authentication -> Sign-in method and enable Email/Password.";
+  }
+  if (code === "auth/unauthorized-domain") {
+    return "⚠️ Domain not authorized! Add your domain in Firebase Console -> Authentication -> Settings -> Authorized Domains.";
+  }
+  if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
+    return "Invalid email or password. If you don't have an account yet, click 'Sign Up' below.";
+  }
+  if (code === "auth/email-already-in-use") {
+    return "An account with this email already exists. Please click 'Sign In' to log in.";
+  }
+  if (code === "auth/weak-password") {
+    return "Password must be at least 6 characters long.";
+  }
+  return err.message || "Authentication failed. Please try again.";
+}
+
 function handleAuthAction() {
   const email = document.getElementById("authEmail").value.trim();
   const pass  = document.getElementById("authPassword").value;
@@ -82,17 +103,17 @@ function handleAuthAction() {
 
   if (isAuthModeLogin) {
     signInWithEmailAndPassword(auth, email, pass)
-      .catch(err => { showToast(err.message, "error"); restore(); });
+      .catch(err => { showToast(formatAuthError(err), "error"); restore(); });
   } else {
     createUserWithEmailAndPassword(auth, email, pass)
-      .catch(err => { showToast(err.message, "error"); restore(); });
+      .catch(err => { showToast(formatAuthError(err), "error"); restore(); });
   }
 }
 
 function handleSignInWithGoogle() {
   const provider = new GoogleAuthProvider();
   signInWithPopup(auth, provider)
-    .catch(err => showToast(err.message, "error"));
+    .catch(err => showToast(formatAuthError(err), "error"));
 }
 
 function handleSignOut() {
