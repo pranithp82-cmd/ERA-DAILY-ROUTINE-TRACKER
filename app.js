@@ -226,13 +226,13 @@ let todaySelectedDate = now_init.toISOString().split("T")[0];
 let currentQuickFilter = "today"; // "today", "tomorrow", "week", "upcoming", "all"
 
 // ===================== INIT =====================
-document.addEventListener("DOMContentLoaded", () => {
+function initApp() {
   // Auth state listener
   onAuthStateChanged(auth, user => {
     if (user) {
       currentUser = user;
       userUid = user.uid;
-      document.getElementById("authOverlay").classList.add("hidden");
+      document.getElementById("authOverlay")?.classList.add("hidden");
       showToast("Signed in as " + (user.displayName || user.email), "success");
 
       migrateDataIfNeeded();
@@ -241,7 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
       currentUser = null;
       userUid = null;
       detachAllListeners();
-      document.getElementById("authOverlay").classList.remove("hidden");
+      document.getElementById("authOverlay")?.classList.remove("hidden");
 
       // Reset state
       tasks = [];
@@ -259,6 +259,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initNavigation();
   updateTodayPageHeader();
   renderAll();
+  
   // Enter key to submit auth form
   document.getElementById("authPassword")?.addEventListener("keydown", e => { if (e.key === "Enter") handleAuthAction(); });
   document.getElementById("authEmail")?.addEventListener("keydown", e => { if (e.key === "Enter") handleAuthAction(); });
@@ -267,7 +268,13 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("authActionBtn")?.addEventListener("click", e => { e.preventDefault(); handleAuthAction(); });
   document.getElementById("googleSignInBtn")?.addEventListener("click", e => { e.preventDefault(); handleSignInWithGoogle(); });
   document.getElementById("authToggleBtn")?.addEventListener("click", e => { e.preventDefault(); toggleAuthMode(); });
-});
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApp);
+} else {
+  initApp();
+}
 
 // ── Expose functions to window for HTML onclick= handlers ────────────────
 window.toggleAuthMode        = toggleAuthMode;
