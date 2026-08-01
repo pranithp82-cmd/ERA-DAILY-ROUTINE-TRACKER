@@ -20,7 +20,8 @@ import {
   get,
   onValue,
   off,
-  child
+  child,
+  remove
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 // ===================== STATE =====================
@@ -77,10 +78,16 @@ function formatAuthError(err) {
   const code = err.code || "";
   console.error("Firebase Auth Error:", err);
   if (code === "auth/operation-not-allowed") {
-    return "⚠️ Email/Password Auth is disabled in Firebase Console! Go to Firebase Console -> Authentication -> Sign-in method and enable Email/Password.";
+    return "⚠️ Auth Provider (Google/Email) is disabled in Firebase Console! Enable Google under Authentication -> Sign-in method.";
   }
   if (code === "auth/unauthorized-domain") {
-    return "⚠️ Domain not authorized! Add your domain in Firebase Console -> Authentication -> Settings -> Authorized Domains.";
+    return "⚠️ Domain not authorized! Add your current domain in Firebase Console -> Authentication -> Settings -> Authorized Domains.";
+  }
+  if (code === "auth/popup-closed-by-user") {
+    return "Sign-in popup was closed before completing.";
+  }
+  if (code === "auth/popup-blocked") {
+    return "Sign-in popup was blocked by your browser. Please allow popups for this site.";
   }
   if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
     return "Invalid email or password. If you don't have an account yet, click 'Sign Up' below.";
@@ -207,11 +214,63 @@ async function migrateDataIfNeeded() {
 }
 
 // ===================== SAVE HELPERS =====================
-function saveTasks()     { if (userUid) set(userRef('tasks'),     tasksToMap(tasks)); }
-function saveRoutines()  { if (userUid) set(userRef('routines'),  routines); }
-function saveNoteData()  { if (userUid) set(userRef('notes'),     notes); }
-function saveDateNotes() { if (userUid) set(userRef('dateNotes'), dateNotes); }
-function saveTheme(t)    { if (userUid) set(userRef('settings/theme'), t); }
+async function saveTasks() {
+  localStorage.setItem("era_tasks", JSON.stringify(tasks));
+  if (userUid) {
+    try {
+      await set(userRef('tasks'), tasksToMap(tasks));
+    } catch (err) {
+      console.error("Firebase saveTasks error:", err);
+      if (err.code === "PERMISSION_DENIED" || err.message?.includes("PERMISSION_DENIED")) {
+        showToast("⚠️ Firebase Permission Denied! Check your Realtime Database Rules.", "error");
+      }
+    }
+  }
+}
+
+async function saveRoutines() {
+  localStorage.setItem("era_routines", JSON.stringify(routines));
+  if (userUid) {
+    try {
+      await set(userRef('routines'), routines);
+    } catch (err) {
+      console.error("Firebase saveRoutines error:", err);
+    }
+  }
+}
+
+async function saveNoteData() {
+  localStorage.setItem("era_notes", JSON.stringify(notes));
+  if (userUid) {
+    try {
+      await set(userRef('notes'), notes);
+    } catch (err) {
+      console.error("Firebase saveNoteData error:", err);
+    }
+  }
+}
+
+async function saveDateNotes() {
+  localStorage.setItem("era_date_notes", JSON.stringify(dateNotes));
+  if (userUid) {
+    try {
+      await set(userRef('dateNotes'), dateNotes);
+    } catch (err) {
+      console.error("Firebase saveDateNotes error:", err);
+    }
+  }
+}
+
+async function saveTheme(t) {
+  localStorage.setItem("era_theme", t);
+  if (userUid) {
+    try {
+      await set(userRef('settings/theme'), t);
+    } catch (err) {
+      console.error("Firebase saveTheme error:", err);
+    }
+  }
+}
 
 // Selected category in the add-task form
 let selectedCategory = "Morning";
@@ -227,6 +286,26 @@ let calFilter = "all";
 // ===================== TODAY'S TASKS STATE =====================
 let todaySelectedDate = now_init.toISOString().split("T")[0];
 let currentQuickFilter = "today"; // "today", "tomorrow", "week", "upcoming", "all"
+
+// ===================== LOCAL STORAGE HELPERS =====================
+function loadLocalState() {
+  try {
+    tasks = JSON.parse(localStorage.getItem("era_tasks") || "[]");
+    notes = JSON.parse(localStorage.getItem("era_notes") || '{"daily":"","shopping":"","ideas":"","reminders":""}');
+    dateNotes = JSON.parse(localStorage.getItem("era_date_notes") || "{}");
+    routines = JSON.parse(localStorage.getItem("era_routines") || '{"Morning":[],"Afternoon":[],"Evening":[],"Night":[]}');
+  } catch (err) {
+    console.error("Error loading local state:", err);
+  }
+  renderAll();
+  loadNotes();
+}
+
+function continueAsGuest() {
+  document.getElementById("authOverlay")?.classList.add("hidden");
+  loadLocalState();
+  showToast("Running in Guest / Offline mode 👤", "info");
+}
 
 // ===================== INIT =====================
 function initApp() {
@@ -244,14 +323,8 @@ function initApp() {
       currentUser = null;
       userUid = null;
       detachAllListeners();
-      document.getElementById("authOverlay")?.classList.remove("hidden");
-
-      // Reset state
-      tasks = [];
-      notes = {"daily":"","shopping":"","ideas":"","reminders":""};
-      dateNotes = {};
-      renderAll();
-      loadNotes();
+      // Load local state so the app works seamlessly even without auth or on live servers
+      loadLocalState();
     }
   });
 
@@ -271,6 +344,7 @@ function initApp() {
   document.getElementById("authActionBtn")?.addEventListener("click", e => { e.preventDefault(); handleAuthAction(); });
   document.getElementById("googleSignInBtn")?.addEventListener("click", e => { e.preventDefault(); handleSignInWithGoogle(); });
   document.getElementById("authToggleBtn")?.addEventListener("click", e => { e.preventDefault(); toggleAuthMode(); });
+  document.getElementById("guestBtn")?.addEventListener("click", e => { e.preventDefault(); continueAsGuest(); });
 }
 
 if (document.readyState === "loading") {
@@ -283,6 +357,7 @@ if (document.readyState === "loading") {
 window.toggleAuthMode        = toggleAuthMode;
 window.handleAuthAction      = handleAuthAction;
 window.signInWithGoogle      = handleSignInWithGoogle;
+window.continueAsGuest       = continueAsGuest;
 window.signOut               = handleSignOut;
 window.addTask               = addTask;
 window.toggleTask            = toggleTask;
@@ -323,6 +398,7 @@ window.toggleSidebar         = toggleSidebar;
 window.navigateTo            = navigateTo;
 window.openRoutineModal      = openRoutineModal;
 window.saveRoutineItem       = saveRoutineItem;
+window.deleteRoutineItem     = deleteRoutineItem;
 
 
 // ===================== CLOCK =====================
@@ -438,7 +514,7 @@ function openRoutineModal(section, editId) {
       document.getElementById('routineItemTime').value = item.time || '';
     }
   }
-  document.getElementById('routineModal').classList.add('active');
+  openModal('routineModal');
 }
 
 function saveRoutineItem() {
@@ -463,6 +539,23 @@ function saveRoutineItem() {
   saveRoutines();
   closeModal('routineModal');
   showToast(editId ? 'Routine updated!' : 'Routine added!', 'success');
+}
+
+function deleteRoutineItem(section, editId) {
+  showConfirm("Delete Routine", "Are you sure you want to delete this routine?", async () => {
+    if (routines[section]) {
+      routines[section] = routines[section].filter(r => r.id !== editId);
+      saveRoutines();
+      if (userUid) {
+        try {
+          await remove(ref(database, `users/${userUid}/routines/${section}/${editId}`));
+        } catch (err) {
+          console.error("Error deleting routine item from Firebase:", err);
+        }
+      }
+      showToast("Routine deleted.", "info");
+    }
+  });
 }
 
 // ===================== ADD TASK =====================
@@ -837,10 +930,11 @@ function saveEditTask() {
 
 // ===================== DELETE TASK =====================
 function deleteTask(id) {
-  showConfirm("Delete Task", "Are you sure you want to permanently delete this task?", () => {
+  showConfirm("Delete Task", "Are you sure you want to permanently delete this task?", async () => {
     tasks = tasks.filter(t => t.id !== id);
-    saveTasks();
+    await saveTasks();
     renderAll();
+    if (document.getElementById("page-calendar")?.classList.contains("active")) renderCalendar();
     showToast("Task deleted.", "info");
   });
 }
@@ -871,7 +965,7 @@ function saveNote(key) {
 function setTheme(theme) {
   currentTheme = theme;
   applyTheme(theme, true);
-  if (dbRef) dbRef.child('settings/theme').set(theme);
+  saveTheme(theme);
 }
 
 function applyTheme(theme, showMsg) {
@@ -886,13 +980,20 @@ function applyTheme(theme, showMsg) {
 }
 
 function confirmDeleteAll() {
-  showConfirm("Delete All Data", "This will permanently delete ALL tasks and notes. This cannot be undone.", () => {
+  showConfirm("Delete All Data", "This will permanently delete ALL tasks and notes. This cannot be undone.", async () => {
     tasks = [];
     notes = { daily: "", shopping: "", ideas: "", reminders: "" };
     dateNotes = {};
     saveTasks();
     saveNoteData();
     saveDateNotes();
+    if (userUid) {
+      try {
+        await remove(ref(database, `users/${userUid}`));
+      } catch (err) {
+        console.error("Error deleting all user data from Firebase:", err);
+      }
+    }
     renderAll();
     loadNotes();
     const dateNotesEl = document.getElementById("todayDateNotes");
@@ -1475,9 +1576,19 @@ document.querySelectorAll(".modal-overlay").forEach(overlay => {
 
 // ===================== CONFIRM DIALOG =====================
 function showConfirm(title, message, onConfirm) {
-  document.getElementById("confirmTitle").textContent = title;
-  document.getElementById("confirmMessage").textContent = message;
-  const btn = document.getElementById("confirmActionBtn");
+  const titleEl = document.getElementById("confirmTitle");
+  const msgEl   = document.getElementById("confirmMessage");
+  const btn     = document.getElementById("confirmActionBtn");
+
+  if (!titleEl || !msgEl || !btn) {
+    if (window.confirm(`${title}\n\n${message}`)) {
+      onConfirm();
+    }
+    return;
+  }
+
+  titleEl.textContent = title;
+  msgEl.textContent = message;
   const newBtn = btn.cloneNode(true);
   btn.parentNode.replaceChild(newBtn, btn);
   newBtn.addEventListener("click", () => {
@@ -1722,9 +1833,16 @@ function calToggleTask(id) {
 
 // ---- Delete from calendar ----
 function calDeleteTask(id) {
-  showConfirm("Delete Task", "Permanently delete this task?", () => {
+  showConfirm("Delete Task", "Permanently delete this task?", async () => {
     tasks = tasks.filter(t => t.id !== id);
     saveTasks();
+    if (userUid) {
+      try {
+        await remove(ref(database, `users/${userUid}/tasks/${id}`));
+      } catch (err) {
+        console.error("Error deleting task from Firebase:", err);
+      }
+    }
     renderAll();
     renderCalendar();
     showToast("Task deleted.", "info");
