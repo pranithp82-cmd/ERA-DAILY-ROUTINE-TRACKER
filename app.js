@@ -41,12 +41,21 @@ let currentTheme = "dark";
 // ── Convert between array <-> Firebase object map ────────────────────────────
 function tasksToMap(arr) {
   const map = {};
-  arr.forEach(t => { if (t && t.id) map[t.id] = t; });
+  (arr || []).forEach(t => {
+    if (t && t.id != null) {
+      const strId = String(t.id);
+      t.id = strId;
+      map[strId] = t;
+    }
+  });
   return map;
 }
 function mapToTasks(map) {
   if (!map) return [];
-  return Object.values(map).filter(Boolean);
+  return Object.values(map).filter(Boolean).map(t => {
+    if (t && t.id != null) t.id = String(t.id);
+    return t;
+  });
 }
 
 /** Convenience: return a database ref for the current user's path */
@@ -870,7 +879,8 @@ function filterTasks() {
 
 // ===================== TOGGLE TASK =====================
 function toggleTask(id) {
-  const task = tasks.find(t => t.id === id);
+  const targetId = String(id);
+  const task = tasks.find(t => String(t.id) === targetId);
   if (!task) return;
 
   if (task.status === "Completed") {
@@ -891,7 +901,8 @@ function toggleTask(id) {
 
 // ===================== EDIT TASK =====================
 function openEditTask(id) {
-  const task = tasks.find(t => t.id === id);
+  const targetId = String(id);
+  const task = tasks.find(t => String(t.id) === targetId);
   if (!task) return;
 
   document.getElementById("editTaskId").value = task.id;
@@ -909,7 +920,8 @@ function openEditTask(id) {
 
 function saveEditTask() {
   const id = document.getElementById("editTaskId").value;
-  const task = tasks.find(t => t.id === id);
+  const targetId = String(id);
+  const task = tasks.find(t => String(t.id) === targetId);
   if (!task) return;
 
   const name = document.getElementById("editTaskName").value.trim();
@@ -930,8 +942,9 @@ function saveEditTask() {
 
 // ===================== DELETE TASK =====================
 function deleteTask(id) {
+  const targetId = String(id);
   showConfirm("Delete Task", "Are you sure you want to permanently delete this task?", async () => {
-    tasks = tasks.filter(t => t.id !== id);
+    tasks = tasks.filter(t => String(t.id) !== targetId);
     await saveTasks();
     renderAll();
     if (document.getElementById("page-calendar")?.classList.contains("active")) renderCalendar();
@@ -1372,9 +1385,10 @@ function exportToPDF() {
 let copySelectedDates = [];
 
 function openCopyTask(id) {
-  const task = tasks.find(t => t.id === id);
+  const targetId = String(id);
+  const task = tasks.find(t => String(t.id) === targetId);
   if (!task) return;
-  document.getElementById("copyTaskId").value = id;
+  document.getElementById("copyTaskId").value = targetId;
   document.getElementById("copyTaskNameDisplay").textContent = task.name;
   copySelectedDates = [];
   document.getElementById("copyTaskDateInput").value = "";
@@ -1417,7 +1431,8 @@ function executeCopyTask() {
     return;
   }
   const id = document.getElementById("copyTaskId").value;
-  const originalTask = tasks.find(t => t.id === id);
+  const targetId = String(id);
+  const originalTask = tasks.find(t => String(t.id) === targetId);
   if (!originalTask) return;
 
   copySelectedDates.forEach(dateStr => {
@@ -1833,16 +1848,10 @@ function calToggleTask(id) {
 
 // ---- Delete from calendar ----
 function calDeleteTask(id) {
+  const targetId = String(id);
   showConfirm("Delete Task", "Permanently delete this task?", async () => {
-    tasks = tasks.filter(t => t.id !== id);
-    saveTasks();
-    if (userUid) {
-      try {
-        await remove(ref(database, `users/${userUid}/tasks/${id}`));
-      } catch (err) {
-        console.error("Error deleting task from Firebase:", err);
-      }
-    }
+    tasks = tasks.filter(t => String(t.id) !== targetId);
+    await saveTasks();
     renderAll();
     renderCalendar();
     showToast("Task deleted.", "info");
