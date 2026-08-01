@@ -944,11 +944,29 @@ function saveEditTask() {
 function deleteTask(id) {
   const targetId = String(id);
   showConfirm("Delete Task", "Are you sure you want to permanently delete this task?", async () => {
+    // 1. Immediately remove task from memory
     tasks = tasks.filter(t => String(t.id) !== targetId);
-    await saveTasks();
+    
+    // 2. Save to localStorage immediately
+    localStorage.setItem("era_tasks", JSON.stringify(tasks));
+    
+    // 3. Immediately re-render UI
     renderAll();
     if (document.getElementById("page-calendar")?.classList.contains("active")) renderCalendar();
     showToast("Task deleted.", "info");
+
+    // 4. Update Firebase DB
+    if (userUid) {
+      try {
+        await remove(ref(database, `users/${userUid}/tasks/${targetId}`));
+        await saveTasks();
+      } catch (err) {
+        console.error("Firebase task delete error:", err);
+        if (err.code === "PERMISSION_DENIED" || err.message?.includes("PERMISSION_DENIED")) {
+          showToast("⚠️ Firebase Permission Denied! Check your Realtime Database Rules.", "error");
+        }
+      }
+    }
   });
 }
 
@@ -1851,10 +1869,22 @@ function calDeleteTask(id) {
   const targetId = String(id);
   showConfirm("Delete Task", "Permanently delete this task?", async () => {
     tasks = tasks.filter(t => String(t.id) !== targetId);
-    await saveTasks();
+    localStorage.setItem("era_tasks", JSON.stringify(tasks));
     renderAll();
     renderCalendar();
     showToast("Task deleted.", "info");
+
+    if (userUid) {
+      try {
+        await remove(ref(database, `users/${userUid}/tasks/${targetId}`));
+        await saveTasks();
+      } catch (err) {
+        console.error("Firebase task delete error:", err);
+        if (err.code === "PERMISSION_DENIED" || err.message?.includes("PERMISSION_DENIED")) {
+          showToast("⚠️ Firebase Permission Denied! Check your Realtime Database Rules.", "error");
+        }
+      }
+    }
   });
 }
 
